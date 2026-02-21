@@ -31,8 +31,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      // secure: true  // turn on after HTTPS deployment
-      sameSite: "lax",
+      secure: true,  // turn on after HTTPS deployment
+      sameSite: "none",
     },
   })
 );
