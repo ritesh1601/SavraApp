@@ -2,35 +2,42 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import statusRoutes from "./routes/status.routes.js";
-import activitiesRoutes from "./routes/activities.routes.js";
-import insightsRoutes from "./routes/insights.routes.js";
+
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "passport";
+
+import statusRoutes from "./routes/status.routes.js";
+import activitiesRoutes from "./routes/activities.routes.js";
+import insightsRoutes from "./routes/insights.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import { setupPassport } from "./auth/passport.js";
-import { getFrontendUrl, validateGoogleCallbackUrl } from "./config.js";
+import { validateGoogleCallbackUrl } from "./config.js";
 
 dotenv.config();
 
-// Validate FRONTEND_URL in production (e.g. on Render) so redirects don't go to localhost
-const FRONTEND_URL = getFrontendUrl();
-
-// Validate GOOGLE_CALLBACK_URL points to backend endpoint, not frontend
-validateGoogleCallbackUrl();
-
 const app = express();
-
 const PORT = process.env.PORT || 5000;
 
-app.use(cors({
-  origin: FRONTEND_URL,
-  credentials: true,
-}));
+const rawFrontend = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND = rawFrontend.replace(/\/$/, ""); // remove trailing slash
+const isProd = process.env.NODE_ENV === "production";
+
+// ✅ CORS (ONE TIME ONLY)
+app.use(
+  cors({
+    origin: FRONTEND,
+    credentials: true,
+  })
+);
+
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 
+// ✅ Needed on Render for secure cookies
+app.set("trust proxy", 1);
+
+// ✅ Session cookies for Vercel <-> Render
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "devsecret",
@@ -38,77 +45,44 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,  // turn on after HTTPS deployment
-      sameSite: "none",
+      secure: isProd,                 // true in production (https)
+      sameSite: isProd ? "none" : "lax",
     },
   })
 );
 
-// Validate required environment variables
-const requiredEnvVars = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_CALLBACK_URL"];
-const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
-if (missingEnvVars.length > 0) {
-  console.error("❌ Missing required environment variables:", missingEnvVars.join(", "));
-}
+// Validate GOOGLE_CALLBACK_URL points to backend endpoint, not frontend
+validateGoogleCallbackUrl();
 
-try {
-  setupPassport();
-  console.log("✅ Passport configured");
-} catch (error) {
-  console.error("❌ Passport setup error:", error.message);
-}
-
+// Passport
+setupPassport();
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Routes
 app.get("/", (req, res) => res.json({ ok: true, service: "savrat-insights" }));
 
+app.use("/auth", authRoutes);
 app.use("/api/activities", activitiesRoutes);
 app.use("/api/insights", insightsRoutes);
 app.use("/api/status", statusRoutes);
-app.use("/auth", authRoutes);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error("❌ Error:", {
-    path: req.path,
-    method: req.method,
-    error: err.message,
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
-  });
-  
-  res.status(err.status || 500).json({
-    ok: false,
-    error: err.message || "Internal server error",
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-  });
+// 404
+app.use((req, res) => {
+  res.status(404).json({ ok: false, error: `Route not found: ${req.method} ${req.path}` });
 });
 
-// 404 handler for undefined routes
-app.use((req, res) => {
-  console.warn("⚠️  404:", req.method, req.path);
-  res.status(404).json({
-    ok: false,
-    error: `Route not found: ${req.method} ${req.path}`,
-    availableRoutes: [
-      "GET /",
-      "GET /auth/google",
-      "GET /auth/google/callback",
-      "GET /auth/logout",
-      "GET /auth/me",
-      "POST /api/activities/bulk",
-      "GET /api/insights/*",
-      "GET /api/status",
-      "POST /api/status",
-    ],
-  });
+// Error handler
+app.use((err, req, res, next) => {
+  console.error("❌ Error:", err);
+  res.status(500).json({ ok: false, error: err.message || "Internal server error" });
 });
 
 async function start() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("✅ Mongo connected");
-    app.listen(PORT, () => console.log(`✅ Server on http://localhost:${PORT}`));
+    app.listen(PORT, () => console.log(`✅ Server listening on ${PORT}`));
   } catch (e) {
     console.error("❌ Startup error:", e);
     process.exit(1);

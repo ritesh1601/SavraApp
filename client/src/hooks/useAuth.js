@@ -9,17 +9,23 @@ export function useAuth() {
 
   async function loadMe() {
     setAuthLoading(true);
+    setAuthError(null);
     try {
       const res = await fetch(`${BASE}/auth/me`, { credentials: "include" });
-      const json = await res.json();
-      if (json.ok && json.user) {
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.ok && json.user) {
         setMe(json.user);
       } else {
         setMe(null);
+        // Only surface non-401 errors (401 = not logged in, which is normal)
+        if (res.status !== 401 && json?.error) {
+          setAuthError(json.error);
+        }
       }
     } catch (error) {
-      console.error("Failed to load user:", error);
+      console.error("[Auth] loadMe failed:", error.message);
       setMe(null);
+      setAuthError(error.message || "Cannot reach server");
     } finally {
       setAuthLoading(false);
     }

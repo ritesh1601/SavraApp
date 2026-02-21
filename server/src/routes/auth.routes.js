@@ -57,4 +57,34 @@ router.get("/me", (req, res) => {
   }
 });
 
+/**
+ * Debug endpoint for auth troubleshooting. Safe to call from browser.
+ * Returns auth/session state (no secrets). Remove or restrict in production if desired.
+ */
+router.get("/debug", (req, res) => {
+  try {
+    const hasSession = !!req.session;
+    const hasSessionId = !!(req.sessionID);
+    const isAuthenticated = !!req.isAuthenticated?.();
+    const origin = req.get("origin") || req.get("referer") || "(none)";
+    res.json({
+      ok: true,
+      debug: {
+        hasSession,
+        hasSessionId,
+        isAuthenticated,
+        userEmail: isAuthenticated && req.user ? req.user.email : null,
+        origin: origin.slice(0, 80),
+        hint: !isAuthenticated && hasSessionId
+          ? "Session exists but user not loaded (e.g. cookie domain/path or deserialize failed)"
+          : !hasSessionId
+            ? "No session cookie received (check CORS, credentials, sameSite, secure)"
+            : null,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 export default router;
