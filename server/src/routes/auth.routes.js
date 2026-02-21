@@ -1,5 +1,6 @@
 import { Router } from "express";
 import passport from "passport";
+import { getFrontendUrl } from "../config.js";
 
 const router = Router();
 
@@ -15,19 +16,19 @@ router.get(
     passport.authenticate("google", { failureRedirect: "/auth/error" }, (err, user, info) => {
       if (err) {
         console.error("❌ OAuth error:", err.message);
-        return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}?error=${encodeURIComponent(err.message)}`);
+        return res.redirect(`${getFrontendUrl()}?error=${encodeURIComponent(err.message)}`);
       }
       if (!user) {
         console.error("❌ OAuth failed:", info?.message || "Authentication failed");
-        return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}?error=${encodeURIComponent(info?.message || "Authentication failed")}`);
+        return res.redirect(`${getFrontendUrl()}?error=${encodeURIComponent(info?.message || "Authentication failed")}`);
       }
       req.logIn(user, (loginErr) => {
         if (loginErr) {
           console.error("❌ Login error:", loginErr.message);
-          return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}?error=${encodeURIComponent(loginErr.message)}`);
+          return res.redirect(`${getFrontendUrl()}?error=${encodeURIComponent(loginErr.message)}`);
         }
         console.log("✅ Login successful for:", user.email);
-        res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
+        res.redirect(getFrontendUrl());
       });
     })(req, res, next);
   }
@@ -40,7 +41,7 @@ router.get("/logout", (req, res, next) => {
       return next(err);
     }
     console.log("✅ Logout successful");
-    res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
+    res.redirect(getFrontendUrl());
   });
 });
 

@@ -10,15 +10,19 @@ import session from "express-session";
 import passport from "passport";
 import authRoutes from "./routes/auth.routes.js";
 import { setupPassport } from "./auth/passport.js";
+import { getFrontendUrl } from "./config.js";
 
 dotenv.config();
+
+// Validate FRONTEND_URL in production (e.g. on Render) so redirects don't go to localhost
+const FRONTEND_URL = getFrontendUrl();
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: FRONTEND_URL,
   credentials: true,
 }));
 app.use(express.json({ limit: "2mb" }));
