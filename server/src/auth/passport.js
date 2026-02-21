@@ -58,8 +58,12 @@ export function setupPassport() {
             return done(new Error("No email found in Google profile"));
           }
 
+          const demoMode = process.env.DEMO_MODE === "true";
+
           const principals = principalEmailsSet();
-          const role = principals.has(email) ? "principal" : "teacher";
+          const role = demoMode
+              ? "principal"   // 👈 in demo, everyone becomes principal
+              : (principals.has(email) ? "principal" : "teacher");
 
           const user = await User.findOneAndUpdate(
             { provider: "google", provider_id },
