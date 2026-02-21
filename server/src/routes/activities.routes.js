@@ -1,6 +1,6 @@
 import { Router } from "express";
 import Activity from "../models/Activity.js";
-import { buildDedupeKey } from "../utils/dedupekey.js"
+import { buildDedupeKey } from "../utils/dedupeKey.js"
 
 const router = Router();
 
