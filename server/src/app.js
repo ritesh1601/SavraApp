@@ -10,12 +10,15 @@ import session from "express-session";
 import passport from "passport";
 import authRoutes from "./routes/auth.routes.js";
 import { setupPassport } from "./auth/passport.js";
-import { getFrontendUrl } from "./config.js";
+import { getFrontendUrl, validateGoogleCallbackUrl } from "./config.js";
 
 dotenv.config();
 
 // Validate FRONTEND_URL in production (e.g. on Render) so redirects don't go to localhost
 const FRONTEND_URL = getFrontendUrl();
+
+// Validate GOOGLE_CALLBACK_URL points to backend endpoint, not frontend
+validateGoogleCallbackUrl();
 
 const app = express();
 
