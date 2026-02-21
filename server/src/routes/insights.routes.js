@@ -13,37 +13,58 @@ function teacherMatch(req) {
 // GET /api/insights/teachers/summary
 router.get("/teachers/summary", async (req, res) => {
   try {
+    const match = teacherMatch(req);
+
     const pipeline = [
-      { $match: teacherMatch(req) },
-      {
-        $group: {
-          _id: { teacher_id: "$teacher_id", teacher_name: "$teacher_name", activity_type: "$activity_type" },
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $group: {
-          _id: { teacher_id: "$_id.teacher_id", teacher_name: "$_id.teacher_name" },
-          counts: { $push: { k: "$_id.activity_type", v: "$count" } },
-          total: { $sum: "$count" },
-        },
-      },
+      { $match: match },
+
+      // Normalize activity_type safely
       {
         $addFields: {
-          countsObj: { $arrayToObject: "$counts" },
+          activity_type_norm: {
+            $switch: {
+              branches: [
+                {
+                  case: { $in: [{ $toLower: { $ifNull: ["$activity_type", ""] } }, ["lesson", "lessons"]] },
+                  then: "lesson",
+                },
+                {
+                  case: { $in: [{ $toLower: { $ifNull: ["$activity_type", ""] } }, ["quiz", "quizzes"]] },
+                  then: "quiz",
+                },
+                {
+                  case: { $in: [{ $toLower: { $ifNull: ["$activity_type", ""] } }, ["assessment", "assessments"]] },
+                  then: "assessment",
+                },
+              ],
+              default: "other",
+            },
+          },
         },
       },
+
+      {
+        $group: {
+          _id: { teacher_id: "$teacher_id", teacher_name: "$teacher_name" },
+          lessons: { $sum: { $cond: [{ $eq: ["$activity_type_norm", "lesson"] }, 1, 0] } },
+          quizzes: { $sum: { $cond: [{ $eq: ["$activity_type_norm", "quiz"] }, 1, 0] } },
+          assessments: { $sum: { $cond: [{ $eq: ["$activity_type_norm", "assessment"] }, 1, 0] } },
+          total: { $sum: 1 },
+        },
+      },
+
       {
         $project: {
           _id: 0,
           teacher_id: "$_id.teacher_id",
           teacher_name: "$_id.teacher_name",
-          lessons: { $ifNull: ["$countsObj.lesson", 0] },
-          quizzes: { $ifNull: ["$countsObj.quiz", 0] },
-          assessments: { $ifNull: ["$countsObj.assessment", 0] },
+          lessons: 1,
+          quizzes: 1,
+          assessments: 1,
           total: 1,
         },
       },
+
       { $sort: { total: -1, teacher_name: 1 } },
     ];
 
@@ -53,50 +74,64 @@ router.get("/teachers/summary", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
-
 // 2) Weekly trend chart
 // GET /api/insights/weekly?teacher_id=T1
 router.get("/weekly", async (req, res) => {
   try {
-    const match = teacherMatch(req);
+    const teacher_id = req.query.teacher_id?.trim();
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const match = {
+      created_at: { $gte: since },
+      ...(teacher_id ? { teacher_id } : {}),
+    };
 
     const pipeline = [
       { $match: match },
       {
-        $group: {
-          _id: {
-            year: { $isoWeekYear: "$created_at" },
-            week: { $isoWeek: "$created_at" },
-            activity_type: "$activity_type",
+        $addFields: {
+          day: { $dateToString: { format: "%Y-%m-%d", date: "$created_at" } },
+          activity_type_norm: {
+            $switch: {
+              branches: [
+                {
+                  case: { $in: [{ $toLower: { $ifNull: ["$activity_type", ""] } }, ["lesson", "lessons"]] },
+                  then: "lesson",
+                },
+                {
+                  case: { $in: [{ $toLower: { $ifNull: ["$activity_type", ""] } }, ["quiz", "quizzes"]] },
+                  then: "quiz",
+                },
+                {
+                  case: { $in: [{ $toLower: { $ifNull: ["$activity_type", ""] } }, ["assessment", "assessments"]] },
+                  then: "assessment",
+                },
+              ],
+              default: "other",
+            },
           },
-          count: { $sum: 1 },
         },
       },
       {
         $group: {
-          _id: { year: "$_id.year", week: "$_id.week" },
-          counts: { $push: { k: "$_id.activity_type", v: "$count" } },
-          total: { $sum: "$count" },
+          _id: "$day",
+          lesson: { $sum: { $cond: [{ $eq: ["$activity_type_norm", "lesson"] }, 1, 0] } },
+          quiz: { $sum: { $cond: [{ $eq: ["$activity_type_norm", "quiz"] }, 1, 0] } },
+          assessment: { $sum: { $cond: [{ $eq: ["$activity_type_norm", "assessment"] }, 1, 0] } },
+          total: { $sum: 1 },
         },
       },
-      { $addFields: { countsObj: { $arrayToObject: "$counts" } } },
       {
         $project: {
           _id: 0,
-          week: {
-            $concat: [
-              { $toString: "$_id.year" },
-              "-W",
-              { $cond: [{ $lt: ["$_id.week", 10] }, { $concat: ["0", { $toString: "$_id.week" }] }, { $toString: "$_id.week" }] },
-            ],
-          },
-          lesson: { $ifNull: ["$countsObj.lesson", 0] },
-          quiz: { $ifNull: ["$countsObj.quiz", 0] },
-          assessment: { $ifNull: ["$countsObj.assessment", 0] },
+          day: "$_id",
+          lesson: 1,
+          quiz: 1,
+          assessment: 1,
           total: 1,
         },
       },
-      { $sort: { week: 1 } },
+      { $sort: { day: 1 } },
     ];
 
     const data = await Activity.aggregate(pipeline);
@@ -105,7 +140,6 @@ router.get("/weekly", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
-
 // 3) Teacher drilldown
 // GET /api/insights/teacher/:teacher_id
 router.get("/teacher/:teacher_id", async (req, res) => {

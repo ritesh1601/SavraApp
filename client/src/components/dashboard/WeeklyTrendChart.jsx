@@ -21,7 +21,7 @@ export default function WeeklyTrendChart({ data }) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0ede8" />
-            <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#b0a99a" }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#b0a99a" }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 11, fill: "#b0a99a" }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #ece9e3", fontSize: 13 }} />
             <Area type="monotone" dataKey="lesson" stroke="#7c3aed" fill="url(#gLesson)" strokeWidth={2} dot={false} />
