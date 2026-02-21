@@ -5,16 +5,8 @@ const router = Router();
 router.use(requireAuth);
 router.use(requireRole("principal"));
 function teacherMatch(req) {
-  function teacherMatch(req) {
-    const teacher_id = req.query.teacher_id?.trim();
-
-    const base = {
-      teacher_id: { $exists: true, $ne: null, $ne: "" },
-      teacher_name: { $exists: true, $ne: null, $ne: "" },
-    };
-
-    return teacher_id ? { ...base, teacher_id } : base;
-  }
+  const teacher_id = req.query.teacher_id?.trim();
+  return teacher_id ? { teacher_id } : {};
 }
 
 // 1) Per-teacher totals
